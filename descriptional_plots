@@ -1,0 +1,569 @@
+#code for descriptive stats, barplots, boxplots, wilcoxon signed rank test, and welch t-tests
+
+#install necessary packages
+install.packages("dplyr")
+install.packages("broom")
+install.packages("ggpubr")
+
+#laoding packages
+library(ggplot2)
+library(janitor)
+library(tidyverse)
+library(dplyr)
+library(broom)
+library(ggpubr)
+library(car)
+
+
+#loading data
+data1 <- read_csv("Data/calr_grading_r.csv")
+
+#filtering out calr_h_score NAs
+data1<- data1 %>% filter(!is.na(calr_h_score))
+
+#Choose columns to just look at
+data1<- dplyr::select(data1, tma_id, donor_num, lnm, mets, calr_h_score, grade)
+
+#filter dataset to include patients with only mets
+data_mets <- data1 %>% filter(mets=="1")
+
+#filter dataset to include patients with neither mets or lnm
+data_no_mets_or_lnm <- data1 %>% filter(lnm=="0", mets=="0")
+
+#merge data_lnm and data_mets-- create dataset that include patients with lnm or mets (one of the two)
+merged_lnm_and_mets <- rbind(data_lnm, data_mets)
+
+
+#count how many mets and non-mets patients there are in the entire dataset
+table(data1$mets)
+
+#descriptive stats of entire dataset/the unfiltered dataset-- not grouped by any variable
+summ_all <- data1 %>% 
+  summarize(mean_H_all=mean(calr_h_score, na.rm=T),
+            sd_H_all=sd(calr_h_score, na.rm=T),
+            median_all=median(calr_h_score, na.rm=T),
+            range= range(calr_h_score, na.rm=T))
+
+
+#descriptive analysis for entire dataset, but grouped by mets
+
+#remove NAs in mets column
+data1<- data1 %>% filter(!is.na(mets))
+
+#descriptive stats
+summ_all_mets <- data1 %>% 
+  group_by(mets)%>%
+  summarize(mean_H_all=mean(calr_h_score, na.rm=T),
+            sd_H_all=sd(calr_h_score, na.rm=T),
+            median_all=median(calr_h_score, na.rm=T))
+
+#bar plot summary
+b <- ggplot(summ_all_mets, aes(x= mets, y= median_all, fill= c("navy", "light blue"))) +
+  geom_bar(stat="identity", color="black", position=position_dodge()) +
+  scale_fill_discrete(labels = c("Metastatic", "Not Metastatic"))+
+  geom_errorbar(aes(ymin=mean_H_all, ymax=mean_H_all+sd_H_all), width=.2,
+                position=position_dodge(.9)) 
+
+#adding labels
+final_bar <- b+labs(x= "Metastatic Status", y = "Average H Score", fill= "Metastatic Status")
+plot(final_bar)
+
+#save graph
+ggsave(filename="barplot_mets_summ.pdf",
+       device="pdf",path="./Images",
+       plot=final_bar,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+#welch t-test, assuming HOV is violated
+t.test(calr_h_score ~ mets, data=data1) #p=0.007055 
+
+
+#looking at mets with dataset filtered to only include origin_site=pancreas 
+#loading data
+data1 <- read_csv("Data/calr_grading_r.csv")
+
+#filtering out NAs
+data1<- data1 %>% filter(!is.na(calr_h_score))
+data1<- data1 %>% filter(!is.na(origin_site))
+data1<- data1 %>% filter(!is.na(mets))
+
+#filter to pancreas only
+data1<- filter(data1, origin_site=="pancreas")
+
+#counting the number of patients with and without mets
+table(data1$mets)
+
+
+#descriptive analysis of pancreas-only dataset, grouped by mets
+summ_all_pancreas_mets <- data1 %>% 
+  group_by(mets)%>%
+  summarize(mean_H_all=mean(calr_h_score, na.rm=T),
+            sd_H_all=sd(calr_h_score, na.rm=T),
+            median_all=median(calr_h_score, na.rm=T))
+
+
+#barplot summary
+b <- ggplot(summ_all_pancreas_mets, aes(x= mets, y= mean_H_all, fill= c("navy", "light blue"))) +
+  geom_bar(stat="identity", color="black", position=position_dodge(), width=0.75) +
+  scale_fill_discrete(labels = c("Metastatic", "Not Metastatic"))+
+  geom_errorbar(aes(ymin=mean_H_all, ymax=mean_H_all+sd_H_all), width=.2,
+                position=position_dodge(.9)) 
+
+#adding labels and changing the font size
+final_bar <- b+labs( x= "Distant Metastatic Status", y = "Average H Score", fill= "Distant Metastatic Status")
+final_bar<- final_bar + theme(axis.text.y = element_text(size=16), axis.text.x=element_text(size=16)) +
+  theme(legend.text=element_text(size=15), legend.title=element_text(size=15), axis.title.x=element_text(size=15), axis.title.y=element_text(size=15))
+
+#view plot
+plot(final_bar)
+
+#save graph
+ggsave(filename="barplot_mets_summ_pancreas.pdf",
+       device="pdf",path="./Images",
+       plot=final_bar,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+#making mets a categorical factor
+data1$mets <- as.factor(data1$mets)
+
+#boxplot for pancreas-only dataset, grouped by mets
+p <- ggplot(data1, aes(x=mets, y=calr_h_score, fill=mets)) + 
+  geom_boxplot(color="black")+
+  theme_classic()+
+  labs(title="H Score and Distant Metastatic Status",x="Distant Metastatic Status", y = "H Score", fill="Metastatic Status")+
+  scale_fill_manual(values=c("springgreen3","darkgreen"), labels = c("Not Metastatic", "Metastatic"))
+
+#changing the font size and adding error bars
+p<- p+ geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme(axis.text.y = element_text(size=16), axis.text.x=element_text(size=16)) 
+p<- p+ theme(legend.text=element_text(size=15), legend.title=element_text(size=15), axis.title.x=element_text(size=15), 
+        axis.title.y=element_text(size=15))
+p<- p+stat_boxplot(geom="errorbar", width=0.15)
+
+#view plot
+plot(p)
+
+#save graph
+ggsave(filename="boxplot_mets_pancreas2.pdf",
+       device="pdf",path="./Images",
+       plot=p,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+
+#welch t-test, assuming HOV is violated
+t.test(calr_h_score ~ mets, data=data1) #p=0.9043 
+
+#wilcoxon signed rank test
+wilcox.test(calr_h_score ~ mets, data= data1, paired=FALSE, exact=FALSE, conf.int=TRUE)
+#p-value: 0.8391
+
+
+#looking at lnm in the pancreas-only dataset
+
+#loading data
+data1 <- read_csv("Data/calr_grading_r.csv")
+
+#filtering out NAs
+data1<- data1 %>% filter(!is.na(calr_h_score))
+data1<- data1 %>% filter(!is.na(origin_site))
+data1<- data1 %>% filter(!is.na(lnm))
+
+#filter data so origin_site=pancreas only
+data1<- filter(data1, origin_site=="pancreas")
+
+#count the number of patients with and without lnm
+table(data1$lnm)
+
+#45 samples total
+
+#desciptive stats for pancreas-only dataset, grouped by lnm
+summ_all_pancreas_lnm <- data1 %>% 
+  group_by(lnm)%>%
+  summarize(mean_H_all=mean(calr_h_score, na.rm=T),
+            sd_H_all=sd(calr_h_score, na.rm=T),
+            median_all=median(calr_h_score, na.rm=T))
+
+#barplot summary
+b <- ggplot(summ_all_pancreas_lnm, aes(x= lnm, y= mean_H_all, fill= c("navy", "light blue"))) +
+  geom_bar(stat="identity", color="black", position=position_dodge(), width=0.75) +
+  scale_fill_discrete(labels = c("Metastatic", "Not Metastatic"))+
+  geom_errorbar(aes(ymin=mean_H_all, ymax=mean_H_all+sd_H_all), width=.2,
+                position=position_dodge(.9)) 
+
+#adding labels to barplot
+final_bar <- b+labs(x= "Lympth Node Metastatic Status", y = "Average H Score", fill= 
+                      "Lympth Node Metastatic Status") 
+
+#changing font size for barplot
+final_bar<- final_bar + theme(axis.text.y = element_text(size=16), axis.text.x=element_text(size=16)) +
+  theme(legend.text=element_text(size=14), legend.title=element_text(size=14), axis.title.x=element_text(size=16),axis.title.y=element_text(size=15))
+
+#view barplot
+plot(final_bar)
+
+#save graph
+ggsave(filename="barplot_lnm_summ_pancreas.pdf",
+       device="pdf",path="./Images",
+       plot=final_bar,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+
+#making lmn a categorical factor
+data1$lnm <- as.factor(data1$lnm)
+
+#boxplot for pancreas-only, grouped by lnm
+p <- ggplot(data1, aes(x=lnm, y=calr_h_score, fill=lnm)) + 
+  geom_boxplot(color="black")+
+  theme_classic()+
+  labs(title="H Score and Lymph Node Metastatic Status",x="Lymph Node Metastatic Status", y = "H Score", fill="Lymph Node Metastatic Status")+
+  scale_fill_manual(values=c("springgreen3","darkgreen"), labels = c("Not Metastatic", "Metastatic"))
+
+#changing font size and adding error bars to boxplot
+p<- p+ geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme(axis.text.y = element_text(size=16), axis.text.x=element_text(size=16)) 
+p<- p+ theme(legend.text=element_text(size=15), legend.title=element_text(size=15), axis.title.x=element_text(size=15), 
+             axis.title.y=element_text(size=15))
+p<- p+stat_boxplot(geom="errorbar", width=0.15)
+
+#view boxplot
+plot(p)
+
+
+#save graph
+ggsave(filename="boxplot_lnm_pancreas2.pdf",
+       device="pdf",path="./Images",
+       plot=p,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+
+#welch t-test, assuming HOV is violated
+t.test(calr_h_score ~ lnm, data=data1) #p=0.0007
+
+#wilcoxon signed-rank sum test
+wilcox.test(calr_h_score ~ lnm, data= data1, paired=FALSE, exact=FALSE, conf.int=TRUE)
+#p-value=0.08
+
+
+
+#investigating malignancy-- compare h scores in normal pancreatic islets (control) with pNETs in pancreas-only dataset
+
+#loading data
+data1 <- read_csv("Data/calr_grading_r.csv")
+
+#filtering out NAs
+data1<- data1 %>% filter(!is.na(calr_h_score))
+data1<- data1 %>% filter(!is.na(origin_site))
+
+#filter so that only samples that have an origin_site= pancreas or control are included in dataset
+data1<- data1 %>% 
+  filter(origin_site %in% c("pancreas", "control"))
+
+#count the number in each group
+table(data1$origin_site)
+#17 control, 51 pancreas
+
+#groups: cancer free=control; cancer=pancreas
+#descriptive analysis, grouped by "group" decribed above
+summ_all_pancreas_h <- data1 %>% 
+  group_by(group)%>%
+  summarize(mean_H_all=mean(calr_h_score, na.rm=T),
+            sd_H_all=sd(calr_h_score, na.rm=T),
+            median_all=median(calr_h_score, na.rm=T))
+
+#barplot summary
+b <- ggplot(summ_all_pancreas_h, aes(x= group, y= mean_H_all, fill= c("navy", "light blue"))) +
+  geom_bar(stat="identity", color="black", position=position_dodge(), width=0.75) +
+  scale_fill_discrete(labels = c("Normal Islets", "pNET Cancer Cells"))+
+  geom_errorbar(aes(ymin=mean_H_all, ymax=mean_H_all+sd_H_all), width=.2,
+                position=position_dodge(.9)) 
+
+#adding labels and changing font size
+final_bar <- b+labs(x= "Cell Type", y = "Average H Score", fill= "Cell Type")
+final_bar<- final_bar + theme(axis.text.y = element_text(size=16), axis.text.x=element_text(size=16)) +
+  theme(legend.text=element_text(size=15), legend.title=element_text(size=15), axis.title.x=element_text(size=16), axis.title.y=element_text(size=15))+
+  scale_x_discrete(labels=c("pNETs", "Normal Islets"))
+
+#view plot
+plot(final_bar)
+
+#save graph
+ggsave(filename="barplot_summ_pancreas_control_malignancy.pdf",
+       device="pdf",path="./Images",
+       plot=final_bar,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+#labeling origin_site as a categorical factor
+data1$origin_site <- as.factor(data1$origin_site)
+
+#boxplot showing malignancy
+p <- ggplot(data1, aes(x=origin_site, y=calr_h_score, fill=origin_site)) + 
+  geom_boxplot(color="black")+
+  theme_classic()+
+  labs(title="H Score and Malignancy",x="Cell Type", y = "H Score", fill="Cell Type")+
+  scale_fill_manual(values=c("springgreen3","darkgreen"), labels = c("Normal Islets", "pNETs"))
+
+#changing font size and axis labels, and adding error bars
+p<- p+ geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme(axis.text.y = element_text(size=16), axis.text.x=element_text(size=16)) 
+p<- p+ theme(legend.text=element_text(size=15), legend.title=element_text(size=15), axis.title.x=element_text(size=15), 
+             axis.title.y=element_text(size=15))
+p<- p+stat_boxplot(geom="errorbar", width=0.15)
+p<- p+ scale_x_discrete(labels=c( "Normal Islets", "pNETs"))
+
+#view boxplot
+plot(p)
+
+
+#save graph
+ggsave(filename="boxplot_malignancy_pancreas2.pdf",
+       device="pdf",path="./Images",
+       plot=p,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+
+#welch t-test, assuming HOV is violated
+t.test(calr_h_score ~ origin_site, data=data1) #p=2.67E-14
+
+#wilcoxon signed-rank test
+wilcox.test(calr_h_score ~ origin_site, data= data1, paired=FALSE, exact=FALSE, conf.int=TRUE)
+#p-value: 2.788E-8
+
+
+#looking at grade in the entire dataset
+
+#filter out NAs in the grade column
+data1 <- read_csv("Data/calr_grading_r.csv")
+data1<- data1 %>% filter(!is.na(calr_h_score))
+data1<- data1 %>% filter(!is.na(grade))
+
+#counting the number of samples in "grade"
+table(data1$grade)
+
+
+#descriptive analysis for entire dataset, grouped by grade
+summ_all_grade <- data1 %>% 
+  group_by(grade)%>%
+  summarize(mean_H_all=mean(calr_h_score, na.rm=T),
+            sd_H_all=sd(calr_h_score, na.rm=T),
+            median_all=median(calr_h_score, na.rm=T))
+
+#barplot summary
+b <- ggplot(summ_all_grade, aes(x= grade, y= mean_H_all, fill= c("navy", "light blue", "dark blue"))) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean_H_all, ymax=mean_H_all+sd_H_all), width=.2,
+                position=position_dodge(.9)) 
+
+#adding labels
+final_bar <- b+labs(x= "Grade", y = "Average H Score")
+
+#view plot
+plot(final_bar)
+
+#save graph
+ggsave(filename="barplot_grade_summ.pdf",
+       device="pdf",path="./Images",
+       plot=final_bar,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+#making grade a factor
+data1$grade <- factor(data1$grade)
+is.factor(data1$grade)
+contrasts(data1$grade)
+
+#anova and Tukey's HSD
+one.way<- aov(calr_h_score~grade, data=data1)
+summary(one.way)
+TukeyHSD(one.way)
+
+
+#looking at grade in pancreas-only dataset
+
+#reading data
+data1 <- read_csv("Data/calr_grading_r.csv")
+
+#filtering out NAs
+data1<- data1 %>% filter(!is.na(calr_h_score))
+data1<- data1 %>% filter(!is.na(origin_site))
+data1<- data1 %>% filter(!is.na(grade))
+
+#filtering to include only pancreas samples
+data1<- filter(data1, origin_site=="pancreas")
+
+#counting grade numbers
+table(data1$grade)
+
+#remove grade 3 cells
+data1 <- (data1[-c(28,35), ])
+
+#counting grade numbers again
+table(data1$grade)
+#51 samples
+
+#descriptive analysis for pancreas-only dataset, grouped by grade
+summ_all_grade_pancreas <- data1 %>% 
+  group_by(grade)%>%
+  summarize(mean_H_all=mean(calr_h_score, na.rm=T),
+            sd_H_all=sd(calr_h_score, na.rm=T),
+            median_all=median(calr_h_score, na.rm=T))
+
+#barplot summary
+b <- ggplot(summ_all_grade_pancreas, aes(x= grade, y= mean_H_all, fill= c("navy", "light blue"))) +
+  geom_bar(stat="identity", color="black", position=position_dodge(), width=0.75) +
+  scale_fill_discrete(labels = c("Grade 2", "Grade 1"))+
+  geom_errorbar(aes(ymin=mean_H_all, ymax=mean_H_all+sd_H_all), width=.2,
+                position=position_dodge(.9)) 
+
+#add labels and changing font size
+final_bar <- b+labs(x= "Grade", y = "Average H Score", fill= "Tumor Grade")
+final_bar<- final_bar + theme(axis.text.y = element_text(size=16), axis.text.x=element_text(size=16)) +
+  theme(legend.text=element_text(size=15), legend.title=element_text(size=15), axis.title.x=element_text(size=16), axis.title.y=element_text(size=15))
+
+#view plot
+plot(final_bar)
+
+#save graph
+ggsave(filename="barplot_grade_summ_pancreas2.pdf",
+       device="pdf",path="./Images",
+       plot=final_bar,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+#making grade a categorical factor
+data1$grade <- factor(data1$grade)
+is.factor(data1$grade)
+contrasts(data1$grade)
+
+#boxplot
+p <- ggplot(data1, aes(x=grade, y=calr_h_score, fill=grade)) + 
+  geom_boxplot(color="black")+
+  theme_classic()+
+  labs(title="H Score and Tumor Grade",x="Tumor Grade", y = "H Score", fill="Tumor Grade")+
+  scale_fill_manual(values=c("springgreen3","darkgreen"), labels = c("Grade 1", "Grade 2"))
+
+#adding error bars and changing font size
+p<- p+ geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme(axis.text.y = element_text(size=16), axis.text.x=element_text(size=16)) 
+p<- p+ theme(legend.text=element_text(size=15), legend.title=element_text(size=15), axis.title.x=element_text(size=15), 
+             axis.title.y=element_text(size=15))
+p<- p+stat_boxplot(geom="errorbar", width=0.15)
+p<- p+ scale_x_discrete(labels=c( "Grade 1", "Grade 2"))
+
+#view plot
+plot(p)
+
+
+#save graph
+ggsave(filename="boxplot_grade_pancreas2.pdf",
+       device="pdf",path="./Images",
+       plot=p,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+#wilcoxon signed-rank test
+wilcox.test(calr_h_score ~ grade, data= data1, paired=FALSE, exact=FALSE, conf.int=TRUE)
+#p-value: 0.7882
+
+#anova and Tukey's HSD
+one.way<- aov(calr_h_score~grade, data=data1)
+summary(one.way)
+TukeyHSD(one.way)
+
+
+#descriptive analysis for all patients (entire dataset), grouped by origin_site
+#loading data
+data1 <- read_csv("Data/calr_grading_r.csv")
+
+#removing NAs
+data1<- data1 %>% filter(!is.na(calr_h_score))
+data1<- data1 %>% filter(!is.na(origin_site))
+
+#counting the number of samples in each origin site
+counts<- table(data1$origin_site)
+count<- data.frame(counts)
+
+#descriptive stats for entire dataset, grouped by origin_site
+summ_all_site <- data1 %>% 
+  group_by(origin_site)%>%
+  summarize(mean_H_all=mean(calr_h_score, na.rm=T),
+            sd_H_all=sd(calr_h_score, na.rm=T),
+            median_all=median(calr_h_score, na.rm=T))
+
+#barplot summary of the average calr_h_score in each origin_site
+b <- ggplot(summ_all_site, aes(x= origin_site, y= mean_H_all, fill= c("navy", "light blue", "dark blue", "pink", "green", "purple"))) +
+  geom_bar(stat="identity", color="black", position=position_dodge()) +
+  scale_fill_discrete(labels = c("Pancreas", "Stomach","lung","liver met","SB", "Unknown"))+
+  geom_errorbar(aes(ymin=mean_H_all, ymax=mean_H_all+sd_H_all), width=.2,
+                position=position_dodge(.9)) 
+
+#adding labels
+final_bar <- b+labs(x= "Origin Site", y = "Average H Score", fill= "Origin Site")
+
+#view plot
+plot(final_bar)
+
+#save graph
+ggsave(filename="barplot_site_summ.pdf",
+       device="pdf",path="./Images",
+       plot=final_bar,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+#bargraph of the counts of each origin_site
+b <- ggplot(count, aes(x= Var1, y= Freq, fill= c("navy", "light blue", "dark blue", "pink", "green", "purple"))) +
+  geom_bar(stat="identity", color="black", position=position_dodge()) +
+  scale_fill_discrete(labels = c("Pancreas", "Stomach","lung","liver met","SB", "Unknown"))
+  
+#add labels
+final_bar <- b+labs(x= "Origin Site", y = "Frequency", fill= "Origin Site")
+plot(final_bar)
+
+#save graph
+ggsave(filename="barplot_site_counts.pdf",
+       device="pdf",path="./Images",
+       plot=final_bar,
+       width=8,
+       height=5,
+       units="in",
+       dpi=500);
+
+#making origin_site a categorical factor
+data1$origin_site <- factor(data1$origin_site)
+is.factor(data1$origin_site)
+contrasts(data1$origin_site)
+
+#anova and Tukey's HSD
+one.way<- aov(calr_h_score~origin_site, data=data1)
+summary(one.way)
+TukeyHSD(one.way)
+
+
