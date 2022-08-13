@@ -25,18 +25,18 @@ data1<- data1 %>% filter(!is.na(calr_h_score))
 #Choose columns to just look at
 data1<- dplyr::select(data1, tma_id, donor_num, lnm, mets, calr_h_score, grade)
 
-#patients with only mets
+#filtering dataset to include patients with only mets
 data_mets <- data1 %>% filter(mets=="1")
 
-#patients with neither mets or lnm
+#filtering dataset to include patients with neither mets or lnm
 data_no_mets_or_lnm <- data1 %>% filter(lnm=="0", mets=="0")
 
-#merge data_lnm and data_mets-- patients with lnm or mets (one of the two)
+#merge data_lnm and data_mets datasets-- patients with lnm or mets (one of the two)
 merged_lnm_and_mets <- rbind(data_lnm, data_mets)
 
 
 
-#histogram of entire dataset-- very left skewed
+#histogram of the entire, unfiltered dataset-- very left skewed
 ggplot(data1) + geom_histogram(aes(x=calr_h_score), bins=8, fill="firebrick", col="black")
 
 #qq plot of entire dataset
