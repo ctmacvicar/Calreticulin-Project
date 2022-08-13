@@ -1,0 +1,99 @@
+#compare h scores in controls/normal pancreatic islets with pNETs
+
+#install necessary packages
+install.packages("caTools")    # For Logistic regression
+install.packages("ROCR")       # For ROC curve to evaluate model
+
+# Loading package
+library(caTools)
+library(ROCR) 
+library(pROC)
+
+#reading data
+training.data.raw <- read_csv('Data/calr_grading_r.csv')
+
+#filter out NAs
+training.data.raw %>% filter(!is.na(calr_h_score))
+training.data.raw <- training.data.raw  %>% filter(!is.na(origin_site))
+
+#filter dataset to only include "control" and "pancreas" in origin_site column
+training.data.raw <- training.data.raw  %>% 
+  filter(origin_site %in% c("pancreas", "control"))
+
+sapply(training.data.raw,function(x) sum(is.na(x)))
+sapply(training.data.raw, function(x) length(unique(x)))
+
+#choosing columns to look at
+data <- subset(training.data.raw,select=c(3, 8, 7,9, 12, 19,26,20, 28))
+
+
+#pancreas is our reference-- making R see origin_site as a categorical factor
+data$origin_site <- factor(data$origin_site)
+is.factor(data$origin_site)
+contrasts(data$origin_site)
+
+
+#Use 70% of dataset as training set and remaining 30% as testing set
+sample <- sample(c(TRUE, FALSE), nrow(data), replace=TRUE, prob=c(0.7,0.3))
+train <- data[sample, ]
+test <- data[!sample, ]  
+
+model <- glm(origin_site~calr_h_score, family="binomial", data=train)
+summary(model)
+
+#p=5.59E-5; y= 0.013446x -1.863
+
+#find odd ratio
+exp(coef(model))
+
+#finding 95% CI
+confint(model)
+
+#assessing model fit by calculating McFadden's R2 
+install.packages("pscl")   
+pscl::pR2(model)["McFadden"]
+#0.00635
+
+#tells us the importance of each predictor variable in the model (higher values= more importance)
+install.packages("caret")   
+caret::varImp(model)
+
+#define two origin_sites
+new <- data.frame(calr_h_score= 150, origin_site = c("pancreas", "control"))
+
+#predict probability
+predict(model, new, type="response")
+
+#calculate probability of default for each individual in test dataset
+predicted <- predict(model, test, type="response")
+
+install.packages("InformationValue")
+library(InformationValue)
+
+#find optimal cutoff probability to use to maximize accuracy
+optimal <- optimalCutoff(test$origin_site, predicted)[1]
+optimal
+
+#0.5682 --- anything higher than this will have mets
+
+
+confusionMatrix(test$origin_site, predicted)
+
+#calculate sensitivity
+sensitivity(test$origin_site, predicted)
+# 0.0
+
+#calculate specificity
+specificity(test$origin_site, predicted)
+#0.5
+
+#calculate total misclassification error rate
+misClassError(test$origin_site, predicted, threshold=optimal)
+
+
+#plot ROC curve
+roc_score=roc(test$origin_site, predicted) #AUC score
+plot<- plot(roc_score ,main ="ROC curve -- Logistic Regression ")
+
+
+
