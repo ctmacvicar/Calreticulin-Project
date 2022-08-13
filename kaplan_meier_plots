@@ -1,0 +1,94 @@
+#code to create kaplan-meier curve plots
+#based off of code from https://shariq-mohammed.github.io/files/cbsa2019/1-intro-to-survival.html#61_model_fit
+
+#installing necessary packages
+install.packages("survminer")
+install.packages("survival")
+
+#loading packages
+library(survival)  # core survival analysis function
+library(survminer) # recommended for visualizing survival curves
+
+#loading data
+data1<- read_csv("Data/calr_grading_r.csv")
+
+#removing NAs in dataset
+data1<- data1 %>% filter(!is.na(calr_h_score))
+data1<- data1 %>% filter(!is.na(origin_site))
+data1<- data1 %>% filter(!is.na(Progression_Recurrency))
+
+#filtering by origin_site=pancreas
+data1<- filter(data1, origin_site=="pancreas")
+
+#creating H score categories based off of the median H score
+median(data1$calr_h_score)
+data1$calr_cat <- cut(data1$calr_h_score,
+                      breaks=c(0, 299, 300),
+     
+                                     labels=c('Low','High'))
+
+
+#creating new dataset with the categories
+write.csv(data1, "Data/calr_survival_cat2.csv")
+
+data1<- read_csv("Data/calr_survival_cat.csv")
+
+#RFS (recurrence free survival time)
+
+sfit = survfit(Surv(RFS, event)~group...14, data=data1)
+plot(sfit)
+summary(sfit)
+summary(sfit, times=seq(0, 1000, 100))
+
+#create plot
+sfit_plot<- ggsurvplot(sfit,
+           conf.int=TRUE, # add confidence intervals
+           pval=TRUE, # show the p-value for the log-rank test
+           risk.table=TRUE, # show a risk table below the plot
+           legend.labs=c("Low", "High"), # change group labels
+           legend.title="H Score Categories",  # add legend title
+           palette=c("goldenrod2", "darkgreen"), # change colors of the groups
+           title="Kaplan-Meier Curve for pNET RFS", # add title to plot
+           xlab="Time (months)", 
+           risk.table.height=.3)
+
+#view plot
+print(sfit_plot)
+
+fit = coxph(Surv(RFS, event)~group...14, data=data1)
+fit
+
+#save plot
+if(!require(devtools)) install.packages("devtools")
+devtools::install_github("kassambara/survminer", build_vignettes = FALSE)
+ggsave(file = "ggsurv.pdf", print(sfit_plot))
+
+#PFS (progression free survival time)
+
+sfit = survfit(Surv(PFS, event_PFS)~group_PFS, data=data1)
+plot(sfit)
+summary(sfit)
+summary(sfit, times=seq(0, 1000, 100))
+
+#create plot
+sfit_plot<- ggsurvplot(sfit,
+                       conf.int=TRUE, # add confidence intervals
+                       pval=TRUE, # show the p-value for the log-rank test
+                       risk.table=TRUE, # show a risk table below the plot
+                       legend.labs=c("Low", "High"), # change group labels
+                       legend.title="H Score Categories",  # add legend title
+                       palette=c("goldenrod2", "darkgreen"), # change colors of the groups
+                       title="Kaplan-Meier Curve for pNET PFS", # add title to plot
+                       xlab="Time (months)", 
+                       risk.table.height=.3)
+
+#view plot
+print(sfit_plot)
+
+fit = coxph(Surv(PFS, event_PFS)~group_PFS, data=data1)
+
+
+#save plot
+if(!require(devtools)) install.packages("devtools")
+devtools::install_github("kassambara/survminer", build_vignettes = FALSE)
+ggsave(file = "ggsurv_PFS.pdf", print(sfit_plot))
