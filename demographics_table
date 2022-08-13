@@ -1,0 +1,29 @@
+#code for creating a demographics table
+
+#installing necessary package
+install.packages("table1")
+
+#loading package
+library(table1)
+
+#reading data
+data<- read_csv("Data/TMA_demographic_data.csv")
+
+#removing NAs in calr_h_score column
+data<- data %>% filter(!is.na(calr_h_score))
+
+#demographics for every origin_site
+#creating labels in table
+table1::label(data$Sex) <- "Sex"
+table1::label(data$Race_Ethnicity) <- "Race/Ethnicity"
+table1::label(data$Age_at_surgery) <- "Age at Surgery"
+
+#creating table
+table1::table1(~Sex + Race_Ethnicity + Age_at_surgery, data = data)
+
+#demographics for pancreas only
+data<- filter(data, origin_site=="pancreas")
+
+#creating table
+table1::table1(~Sex + Race_Ethnicity + Age_at_surgery, data = data)
+
