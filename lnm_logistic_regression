@@ -1,0 +1,66 @@
+#code for logistic regression for lnm
+
+#install necessary package
+install.packages("caret")  
+install.packages("caTools")    # For Logistic regression
+install.packages("ROCR")       # For ROC curve to evaluate model
+
+# Loading package
+library(caTools)
+library(ROCR) 
+library(pROC)
+
+
+#loading data
+training.data.raw <- read_csv('Data/calr_grading_r.csv')
+
+#filtering data to pancreas-only for origin_site
+training.data.raw<- filter(training.data.raw, origin_site=="pancreas")
+
+sapply(training.data.raw,function(x) sum(is.na(x)))
+sapply(training.data.raw, function(x) length(unique(x)))
+
+#selecting important columns from dataset
+data <- subset(training.data.raw,select=c(3, 8, 10, 9, 12, 13, 19, 20, 28))
+
+#filtering out NAs in the calr_h_score and lnm column
+data$calr_h_score[is.na(data$calr_h_score)] <- mean(data$calr_h_score,na.rm=T)
+data<- data %>% filter(!is.na(lnm))
+
+
+#making R see lnm as a factor. lnm0 is our reference
+data$lnm <- factor(data$lnm)
+is.factor(data$lnm)
+contrasts(data$lnm)
+
+
+#Use 70% of dataset as training set and remaining 30% as testing set
+sample <- sample(c(TRUE, FALSE), nrow(data), replace=TRUE, prob=c(0.7,0.3))
+train <- data[sample, ]
+test <- data[!sample, ]  
+
+
+#fit logistic regression model
+model <- glm(lnm~calr_h_score, family="binomial", data=train)
+summary(model)
+
+#find odd ratio
+exp(coef(model))
+
+#finding 95% CI
+confint(model)
+
+caret::varImp(model)
+#define two lnm
+new <- data.frame(calr_h_score= 150, lnm = c("0", "1"))
+
+#predict probability of lnm
+predict(model, new, type="response")
+
+#calculate probability of default for each individual in test dataset
+predicted <- predict(model, test, type="response")
+
+
+#plot ROC curve
+roc_score=roc(test$lnm, predicted) #AUC score
+plot<- plot(roc_score ,main ="ROC curve -- Logistic Regression ")
