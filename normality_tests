@@ -1,0 +1,165 @@
+#code to test if data is normal or not
+
+#installing necessary packages
+install.packages("dplyr")
+install.packages("broom")
+install.packages("ggpubr")
+
+#loading packages
+library(ggplot2)
+library(janitor)
+library(tidyverse)
+library(dplyr)
+library(broom)
+library(ggpubr)
+library(car)
+
+
+#loading data
+data1 <- read_csv("Data/calr_grading_r.csv")
+
+#filtering out NAs in the mets and calr_h_score columns
+data1<- data1 %>% filter(!is.na(mets))
+data1<- data1 %>% filter(!is.na(calr_h_score))
+
+#Choose columns to just look at
+data1<- dplyr::select(data1, tma_id, donor_num, lnm, mets, calr_h_score, grade)
+
+#patients with only mets
+data_mets <- data1 %>% filter(mets=="1")
+
+#patients with neither mets or lnm
+data_no_mets_or_lnm <- data1 %>% filter(lnm=="0", mets=="0")
+
+#merge data_lnm and data_mets-- patients with lnm or mets (one of the two)
+merged_lnm_and_mets <- rbind(data_lnm, data_mets)
+
+
+
+#histogram of entire dataset-- very left skewed
+ggplot(data1) + geom_histogram(aes(x=calr_h_score), bins=8, fill="firebrick", col="black")
+
+#qq plot of entire dataset
+qqnorm(data1$calr_h_score, datax = TRUE, pch = 16, col = "firebrick", 
+       las = 1, ylab = "H score", xlab = "Normal quantile", main = "")
+qqline(data1$calr_h_score, datax= TRUE)
+
+#test if data is normal-- it is not (p=5.507e-9)
+shapiro.test(data1$calr_h_score)
+
+
+
+#histogram of dataset containing patients with no mets/lnm-- very left skewed
+ggplot(data_no_mets_or_lnm) + geom_histogram(aes(x=calr_h_score), bins=8, fill="firebrick", col="black")
+
+#qq plot of dataset containing patients with no mets/lnm
+qqnorm(data_no_mets_or_lnm$calr_h_score, datax = TRUE, pch = 16, col = "firebrick", 
+       las = 1, ylab = "H score", xlab = "Normal quantile", main = "")
+qqline(data_no_mets_or_lnm$calr_h_score, datax= TRUE)
+
+#test if dataset containing patients with no mets/lnm is normal-- it is not (p=7.602e-7)
+shapiro.test(data_no_mets_or_lnm$calr_h_score)
+
+
+#descriptive analysis for lnm or mets patients
+summ_lnm_or_mets <- merged_lnm_and_mets %>% 
+  summarize(mean_H=mean(calr_h_score, na.rm=T),
+            sd_H=sd(calr_h_score, na.rm=T),
+            median=median(calr_h_score, na.rm=T))
+
+#histogram for lnm or mets patients-- very left skewed
+ggplot(merged_lnm_and_mets) + geom_histogram(aes(x=calr_h_score), bins=8, fill="firebrick", col="black")
+
+#qq plot-- "heavy tails"
+qqnorm(merged_lnm_and_mets$calr_h_score, datax = TRUE, pch = 16, col = "firebrick", 
+       las = 1, ylab = "H score", xlab = "Normal quantile", main = "")
+qqline(merged_lnm_and_mets$calr_h_score, datax= TRUE)
+
+#test if dataset containing lnm or mets patients is normal-- it is not (p=8.74e-6)
+shapiro.test(merged_lnm_and_mets$calr_h_score)
+
+
+#normality tests for pancreas-only dataset 
+
+#reading data
+data1 <- read_csv("Data/calr_grading_r.csv")
+
+#filtering out NAs in calr_h_score
+data1<- data1 %>% filter(!is.na(origin_site))
+data1<- data1 %>% filter(!is.na(calr_h_score))
+
+#filtering by origin_site
+data1<- filter(data1, origin_site=="pancreas")
+
+#histogram
+ggplot(data1) + geom_histogram(aes(x=calr_h_score), bins=8, fill="firebrick", col="black")
+
+#test if data is normal by using calr_h_score-- it is not (p=8.74e-6)
+shapiro.test(data1$calr_h_score)
+
+
+
+#test if data is normal by using mets
+
+#removing NAs in mets column
+data2<- data1 %>% filter(!is.na(mets))
+
+#filtering dataset to only include patients with mets
+data02<- filter(data2, mets=="1")
+
+#statistical test to see if dataset is normal by using calr_h_score
+shapiro.test(data02$calr_h_score)
+#p=0.0001098
+
+#filtering data to incllude only patients without mets
+data002<- filter(data2, mets=="0")
+
+#statistical test to see if dataset is normal by using calr_h_score
+shapiro.test(data002$calr_h_score)
+#p=7.602E-7
+
+
+#lnm
+
+#filter out NAs in lnm column
+data3<- data1 %>% filter(!is.na(lnm))
+
+#filter dataset to only include patients with lnm
+data03<- filter(data3, lnm=="1")
+
+#test
+shapiro.test(data03$calr_h_score)
+#p=4.136E-6
+
+#filter dataset to only include patients without lnm
+data003<- filter(data3, lnm=="0")
+
+#test
+shapiro.test(data003$calr_h_score)
+#p=5.711E-7
+
+
+#grade
+
+#removing NAs in grade column
+data4<-data1 %>% filter(!is.na(grade))
+
+#remove grade 3 cells
+data4 <- (data4[-c(28,35), ])
+
+#filtering dataset to only include patients with grade 1
+data04<- filter(data4, grade=="1")
+
+#test
+shapiro.test(data04$calr_h_score)
+#p=8.693E-6
+
+#filtering dataset to only include patients with grade 2
+data004<- filter(data4, grade=="2")
+
+#test
+shapiro.test(data004$calr_h_score)
+#p=2.014E-5
+
+
+
