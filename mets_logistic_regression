@@ -1,0 +1,91 @@
+#mets logistic regression code
+
+#install necessary packages
+install.packages("caTools")    # For Logistic regression
+install.packages("ROCR")       # For ROC curve to evaluate model
+
+#Loading packages
+library(caTools)
+library(ROCR) 
+
+
+#loading data
+training.data.raw <- read_csv('Data/calr_grading_r.csv')
+
+#filter dataset by origin_site=pancreas
+training.data.raw<- filter(training.data.raw, origin_site=="pancreas")
+
+
+sapply(training.data.raw,function(x) sum(is.na(x)))
+sapply(training.data.raw, function(x) length(unique(x)))
+
+#selecting important columns
+data <- subset(training.data.raw,select=c(3, 8, 10, 9, 12, 19, 20, 28, 7, 28))
+
+#filtering out NAs in the calr_h_score and mets column
+data$calr_h_score[is.na(data$calr_h_score)] <- mean(data$calr_h_score,na.rm=T)
+data<- data %>% filter(!is.na(mets))
+data<- data %>% filter(!is.na(origin_site))
+
+
+#making R see mets as a factor. mets0 is our reference
+data$mets <- factor(data$mets)
+is.factor(data$mets)
+contrasts(data$mets)
+
+
+#Use 70% of dataset as training set and remaining 30% as testing set
+sample <- sample(c(TRUE, FALSE), nrow(data), replace=TRUE, prob=c(0.7,0.3))
+train <- data[sample, ]
+test <- data[!sample, ]  
+
+
+#fit logistic regression model
+model <- glm(mets~calr_h_score, family="binomial", data=train)
+summary(model)
+
+#find odd ratio
+exp(coef(model))
+
+#finding 95% CI
+confint(model)
+
+#assessing model fit by calculating McFadden's R2 (numbers over 0.4= model fits data well)
+install.packages("pscl")   
+pscl::pR2(model)["McFadden"]
+#0.0464
+
+#tells us the importance of each predictor variable in the model (higher values= more importance)
+install.packages("caret")   
+caret::varImp(model)
+
+#define two mets (150 is an arbitrary number)
+new <- data.frame(calr_h_score= 150, mets = c("0", "1"))
+
+#predict probability of mets
+predict(model, new, type="response")
+
+#calculate probability of default for each individual in test dataset
+predicted <- predict(model, test, type="response")
+
+#find optimal cutoff probability to use to maximize accuracy
+optimal <- optimalCutoff(test$mets, predicted)[1]
+optimal
+
+#shows our predictions compared to our actual mets
+confusionMatrix(test$mets, predicted)
+
+#calculate sensitivity
+sensitivity(test$mets, predicted) #0.7391
+
+#calculate specificity
+specificity(test$mets, predicted) #0.533
+
+#calculate total misclassification error rate
+misClassError(test$mets, predicted, threshold=optimal) #0.3421-- 34% yikes
+
+#plot ROC curve
+library(pROC)
+roc_score=roc(test$mets, predicted) #AUC score
+plot<- plot(roc_score ,main ="ROC curve -- Logistic Regression ")
+
